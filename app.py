@@ -1,4 +1,6 @@
 import streamlit as st
+import torch
+
 from streamlit_drawable_canvas import st_canvas
 
 from models.model_setup import load_model
@@ -17,10 +19,30 @@ st.set_page_config(
 
 
 # -------------------------------------------------
+# Model Settings
+# -------------------------------------------------
+
+IMAGE_SIZE = 384
+INFERENCE_STEPS = 8
+GUIDANCE_SCALE = 6.5
+
+
+# -------------------------------------------------
+# Load AI Model
+# -------------------------------------------------
+
+@st.cache_resource
+def get_model():
+
+    return load_model()
+
+
+# -------------------------------------------------
 # Title
 # -------------------------------------------------
 
 st.title("🎨 Doodle2Reality")
+
 st.subheader("Sketch-to-Image Translator")
 
 st.write(
@@ -30,21 +52,15 @@ st.write(
 
 
 # -------------------------------------------------
-# Load AI Model
-# -------------------------------------------------
-
-@st.cache_resource
-def get_model():
-    return load_model()
-
-
-# -------------------------------------------------
 # User Description
 # -------------------------------------------------
 
 description = st.text_input(
     "What did you draw?",
-    placeholder="Example: A realistic red sports car on a mountain road"
+    placeholder=(
+        "Example: A realistic red sports car "
+        "on a mountain road"
+    )
 )
 
 
@@ -55,13 +71,21 @@ description = st.text_input(
 st.write("### ✏️ Draw your doodle")
 
 canvas_result = st_canvas(
+
     fill_color="rgba(255, 255, 255, 0)",
+
     stroke_width=5,
+
     stroke_color="#000000",
+
     background_color="#FFFFFF",
+
     height=500,
+
     width=700,
+
     drawing_mode="freedraw",
+
     key="drawing_canvas",
 )
 
@@ -72,56 +96,108 @@ canvas_result = st_canvas(
 
 if st.button("✨ Generate Reality"):
 
+    # Check if user has drawn something
     if canvas_result.image_data is None:
 
-        st.warning("Please draw something first!")
+        st.warning(
+            "Please draw something first!"
+        )
 
     else:
 
-        # Process the doodle
+        # -----------------------------------------
+        # Preprocess Doodle
+        # -----------------------------------------
+
         doodle = preprocess_doodle(
-            canvas_result.image_data
+            canvas_result.image_data,
+            size=IMAGE_SIZE
         )
 
-        # Get the user prompt
+
+        # -----------------------------------------
+        # Create Prompt
+        # -----------------------------------------
+
         prompt = description.strip()
 
         if not prompt:
-            prompt = "a highly realistic photograph based on this sketch"
 
-        # Show input
+            prompt = (
+                "a highly realistic photograph "
+                "based on this sketch"
+            )
+
+
+        # -----------------------------------------
+        # Show Input
+        # -----------------------------------------
+
         st.write("### ✏️ Input Doodle")
 
         st.image(
             doodle,
             caption="Processed Doodle",
-            width=400
+            width=384
         )
 
-        # Load model
-        with st.spinner("🧠 Loading AI model..."):
+
+        # -----------------------------------------
+        # Load AI Model
+        # -----------------------------------------
+
+        with st.spinner(
+            "🧠 Loading AI model..."
+        ):
 
             pipe = get_model()
 
-        # Generate image
+
+        # -----------------------------------------
+        # Generate Image
+        # -----------------------------------------
+
         with st.spinner(
-            "🎨 Generating realistic image... "
-            "This may take a long time on CPU."
+            "🎨 Generating realistic image..."
         ):
 
-            result = pipe(
-                prompt=prompt,
-                image=doodle,
-                num_inference_steps=10,
-                guidance_scale=7.5
-            )
+            # Disable gradient calculations
+            with torch.inference_mode():
+
+                result = pipe(
+
+                    prompt=prompt,
+
+                    image=doodle,
+
+                    num_inference_steps=INFERENCE_STEPS,
+
+                    guidance_scale=GUIDANCE_SCALE,
+
+                    height=IMAGE_SIZE,
+
+                    width=IMAGE_SIZE
+                )
+
+
+        # -----------------------------------------
+        # Extract Generated Image
+        # -----------------------------------------
 
         generated_image = result.images[0]
 
-        # Show generated image
-        st.success("Image generated successfully!")
 
-        st.write("## 📸 Generated Reality")
+        # -----------------------------------------
+        # Display Result
+        # -----------------------------------------
+
+        st.success(
+            "Image generated successfully!"
+        )
+
+        st.write(
+            "## 📸 Generated Reality"
+        )
 
         st.image(
             generated_image,
