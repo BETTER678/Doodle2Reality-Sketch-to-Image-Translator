@@ -7,28 +7,30 @@ from diffusers import (
 
 def load_model():
 
-    # Your system uses CPU
-    device = "cpu"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    print("Loading AI model...")
-    print(f"Using device: {device}")
-
-    # Load Scribble ControlNet
-    controlnet = ControlNetModel.from_pretrained(
-        "lllyasviel/control_v11p_sd15_scribble",
-        torch_dtype=torch.float32
+    dtype = (
+        torch.float16
+        if device == "cuda"
+        else torch.float32
     )
 
-    # Load Stable Diffusion
+    print(f"Using device: {device}")
+
+    controlnet = ControlNetModel.from_pretrained(
+        "lllyasviel/control_v11p_sd15_scribble",
+        torch_dtype=dtype
+    )
+
     pipe = StableDiffusionControlNetPipeline.from_pretrained(
         "runwayml/stable-diffusion-v1-5",
         controlnet=controlnet,
-        torch_dtype=torch.float32,
-        safety_checker=None
+        torch_dtype=dtype
     )
 
-    # Move model to CPU
     pipe = pipe.to(device)
+
+    pipe.enable_attention_slicing()
 
     print("Model loaded successfully!")
 
